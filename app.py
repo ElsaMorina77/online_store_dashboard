@@ -11,6 +11,7 @@ from src.analysis import (
     get_previous_period_df,
 )
 from src.kpi_cards import render_kpi_cards
+from src.charts import render_charts
 
 
 st.title("📊 Online Store Dashboard")
@@ -149,9 +150,14 @@ render_kpi_cards([
     },
 ])
 
+# -----------------------
+# 6. CHARTS
+# -----------------------
+render_charts(df)
+
 
 # -----------------------
-# 6. SHOW DATA
+# 7. SHOW DATA
 # -----------------------
 
 with st.expander("View Raw Data"):
