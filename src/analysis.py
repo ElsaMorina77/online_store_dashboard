@@ -1,41 +1,123 @@
 import pandas as pd
 import streamlit as st
 
+
+# ============================================================
+# DATA PREPARATION
+# ============================================================
+
 @st.cache_data
 def prepare_data(df):
+    """
+    Add calculated fields required by the dashboard.
+    """
+
     df = df.copy()
 
-    df["TotalPrice"] = df["Quantity"] * df["Price"]
-    df["InvoiceDate"] = pd.to_datetime(df["InvoiceDate"])
-    df["InvoiceMonth"] = df["InvoiceDate"].dt.to_period("M").astype(str)
+    required_columns = [
+        "Quantity",
+        "Price",
+        "InvoiceDate",
+    ]
+
+    missing_columns = [
+        column
+        for column in required_columns
+        if column not in df.columns
+    ]
+
+    if missing_columns:
+        raise ValueError(
+            "Missing required columns for analysis: "
+            f"{missing_columns}"
+        )
+
+    df["TotalPrice"] = (
+        df["Quantity"] * df["Price"]
+    )
+
+    df["InvoiceDate"] = pd.to_datetime(
+        df["InvoiceDate"],
+        errors="coerce",
+    )
+
+    df = df.dropna(
+        subset=["InvoiceDate"]
+    )
+
+    df["InvoiceMonth"] = (
+        df["InvoiceDate"]
+        .dt.to_period("M")
+        .astype(str)
+    )
 
     return df
 
 
+# ============================================================
+# FILTER OPTIONS
+# ============================================================
+
 @st.cache_data
 def get_unique_countries(df):
-    return sorted(df["Country"].dropna().unique())
+    return sorted(
+        df["Country"]
+        .dropna()
+        .unique()
+    )
 
 
 @st.cache_data
 def get_unique_months(df):
-    return sorted(df["InvoiceMonth"].dropna().unique())
+    return sorted(
+        df["InvoiceMonth"]
+        .dropna()
+        .unique()
+    )
 
 
 @st.cache_data
 def get_top_products(df):
-    return df["Description"].dropna().value_counts().index[:50].tolist()
+    """
+    Return the top 50 products ranked by revenue.
+    """
 
-#Kpi's down here:
+    return (
+        df.dropna(subset=["Description"])
+        .groupby("Description")["TotalPrice"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(50)
+        .index
+        .tolist()
+    )
+
+
+# ============================================================
+# KPI CALCULATIONS
+# ============================================================
+
 @st.cache_data
 def calculate_kpis(df):
-    total_revenue = df["TotalPrice"].sum()
+    """
+    Calculate the main executive dashboard KPIs.
+    """
 
-    total_orders = df["Invoice"].nunique()
+    total_revenue = (
+        df["TotalPrice"].sum()
+    )
 
-    total_customers = df["Customer ID"].nunique()
+    total_orders = (
+        df["Invoice"].nunique()
+    )
 
-    total_items = df["Quantity"].sum()
+    total_customers = (
+        df["Customer ID"].nunique()
+    )
+
+    total_items = (
+        df["Quantity"].sum()
+    )
 
     average_order_value = (
         total_revenue / total_orders
@@ -48,58 +130,128 @@ def calculate_kpis(df):
         "total_orders": total_orders,
         "total_customers": total_customers,
         "total_items": total_items,
-        "average_order_value": average_order_value
+        "average_order_value": (
+            average_order_value
+        ),
     }
 
 
-def get_previous_period_df(df, selected_months):
-    """
-    Given a dataframe (already filtered by Country/Product but NOT by month)
-    and the list of currently selected months (e.g. ['2011-08', '2011-09']),
-    return the rows belonging to the immediately preceding period of the
-    same length.
+# ============================================================
+# PREVIOUS PERIOD
+# ============================================================
 
-    Example: if selected_months = ['2011-08', '2011-09'] (2 months),
-    this returns data for ['2011-06', '2011-07'].
+def get_previous_period_df(
+    df,
+    selected_months,
+):
     """
+    Return rows for the period immediately preceding the
+    selected period, using the same number of months.
+
+    Example:
+        Selected:
+            2011-08
+            2011-09
+
+        Previous:
+            2011-06
+            2011-07
+    """
+
     if not selected_months:
         return df.iloc[0:0]
 
-    all_months = sorted(df["InvoiceMonth"].dropna().unique())
-    n = len(selected_months)
+    all_months = sorted(
+        df["InvoiceMonth"]
+        .dropna()
+        .unique()
+    )
 
-    earliest_selected = min(selected_months)
-    idx = all_months.index(earliest_selected)
+    number_of_months = len(
+        selected_months
+    )
 
-    start = max(0, idx - n)
-    previous_months = all_months[start:idx]
+    earliest_selected = min(
+        selected_months
+    )
+
+    if earliest_selected not in all_months:
+        return df.iloc[0:0]
+
+    selected_index = all_months.index(
+        earliest_selected
+    )
+
+    start_index = max(
+        0,
+        selected_index - number_of_months,
+    )
+
+    previous_months = all_months[
+        start_index:selected_index
+    ]
 
     if not previous_months:
         return df.iloc[0:0]
 
-    return df[df["InvoiceMonth"].isin(previous_months)]
+    return df[
+        df["InvoiceMonth"].isin(
+            previous_months
+        )
+    ]
 
+
+# ============================================================
+# KPI DELTAS
+# ============================================================
 
 @st.cache_data
-def calculate_kpis_with_delta(current_df, previous_df):
+def calculate_kpis_with_delta(
+    current_df,
+    previous_df,
+):
     """
-    Returns (current_kpis, deltas) where deltas is a dict of
-    {kpi_name: percent_change_or_None}.
-    percent_change is None when there's no previous-period data to compare
-    against (e.g. you're looking at the very first month in the dataset).
+    Calculate current KPIs and percentage changes against
+    the previous comparison period.
+
+    A delta is None when no valid previous-period comparison
+    is available.
     """
-    current = calculate_kpis(current_df)
+
+    current = calculate_kpis(
+        current_df
+    )
 
     if previous_df.empty:
-        return current, {k: None for k in current}
+        return (
+            current,
+            {
+                key: None
+                for key in current
+            },
+        )
 
-    previous = calculate_kpis(previous_df)
+    previous = calculate_kpis(
+        previous_df
+    )
 
     deltas = {}
+
     for key in current:
-        prev_val = previous.get(key, 0)
-        if prev_val:
-            deltas[key] = ((current[key] - prev_val) / prev_val) * 100
+        previous_value = previous.get(
+            key,
+            0,
+        )
+
+        if previous_value != 0:
+            deltas[key] = (
+                (
+                    current[key]
+                    - previous_value
+                )
+                / previous_value
+                * 100
+            )
         else:
             deltas[key] = None
 
