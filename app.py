@@ -1,3 +1,5 @@
+import pandas as pd
+
 import streamlit as st
 
 from src.data_loader import load_data
@@ -12,6 +14,8 @@ from src.analysis import (
 )
 from src.kpi_cards import render_kpi_cards
 from src.charts import render_charts
+from src.cancelled_analysis import render_cancelled_dashboard
+
 
 
 st.title("📊 Online Store Dashboard")
@@ -57,9 +61,13 @@ if df is None:
 # 3. PROCESS DATA
 # -----------------------
 
+df_original = df.copy()
+
 df = clean_data(df)
 df = prepare_data(df)
 
+df_cancel_source = df_original.copy()
+df_cancel_source = prepare_data(df_cancel_source)
 
 # -----------------------
 # 4. FILTERS
@@ -155,6 +163,10 @@ render_kpi_cards([
 # -----------------------
 render_charts(df)
 
+## -----------------------
+# 6B. CANCELLED ORDERS ANALYSIS
+# -----------------------
+render_cancelled_dashboard(df_cancel_source)
 
 # -----------------------
 # 7. SHOW DATA
