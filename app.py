@@ -164,6 +164,82 @@ def create_csv_download(
     ).encode("utf-8")
 
 
+@st.cache_data(show_spinner=False)
+def build_processing_summary(
+    raw_df: pd.DataFrame,
+    df_sales: pd.DataFrame,
+) -> dict:
+    """
+    Summarize how uploaded data is transformed for the dashboard.
+    """
+
+    raw_rows = len(raw_df)
+    cleaned_rows = len(df_sales)
+
+    duplicate_rows = int(
+        raw_df.duplicated().sum()
+    )
+
+    price_series = pd.to_numeric(
+        raw_df.get("Price"),
+        errors="coerce",
+    )
+    quantity_series = pd.to_numeric(
+        raw_df.get("Quantity"),
+        errors="coerce",
+    )
+
+    invalid_price_rows = int(
+        (price_series <= 0)
+        .fillna(False)
+        .sum()
+    )
+
+    invalid_quantity_rows = int(
+        (
+            (quantity_series <= 0)
+            | (quantity_series > 10000)
+        )
+        .fillna(False)
+        .sum()
+    )
+
+    cancelled_rows = 0
+    if "Invoice" in raw_df.columns:
+        cancelled_rows = int(
+            raw_df["Invoice"]
+            .astype(str)
+            .str.upper()
+            .str.startswith("C")
+            .sum()
+        )
+
+    date_range = "Unavailable"
+    if (
+        not df_sales.empty
+        and "InvoiceDate" in df_sales.columns
+    ):
+        min_date = df_sales["InvoiceDate"].min()
+        max_date = df_sales["InvoiceDate"].max()
+
+        if pd.notna(min_date) and pd.notna(max_date):
+            date_range = (
+                f"{min_date:%Y-%m-%d} to "
+                f"{max_date:%Y-%m-%d}"
+            )
+
+    return {
+        "raw_rows": raw_rows,
+        "cleaned_rows": cleaned_rows,
+        "removed_rows": raw_rows - cleaned_rows,
+        "duplicate_rows": duplicate_rows,
+        "invalid_price_rows": invalid_price_rows,
+        "invalid_quantity_rows": invalid_quantity_rows,
+        "cancelled_rows": cancelled_rows,
+        "date_range": date_range,
+    }
+
+
 # ============================================================
 # 1. DATA INPUT
 # ============================================================
@@ -255,6 +331,12 @@ try:
 
         df_sales, df_cancel_source = (
             prepare_dashboard_data(df)
+        )
+        processing_summary = (
+            build_processing_summary(
+                df,
+                df_sales,
+            )
         )
 
 
@@ -421,6 +503,51 @@ st.caption(
     f"from {len(df):,} original transaction rows."
 )
 
+with st.expander(
+    "What happens behind the scenes after data is loaded?"
+):
+    st.write(
+        "The uploaded file is prepared once, and the dashboard then computes "
+        "only the analytics bundle for the preset view you choose."
+    )
+
+    step_col1, step_col2, step_col3 = st.columns(3)
+
+    step_col1.metric(
+        "Original Rows",
+        f"{processing_summary['raw_rows']:,}",
+    )
+    step_col2.metric(
+        "Rows Used for Sales",
+        f"{processing_summary['cleaned_rows']:,}",
+    )
+    step_col3.metric(
+        "Rows Removed",
+        f"{processing_summary['removed_rows']:,}",
+    )
+
+    note_col1, note_col2, note_col3 = st.columns(3)
+
+    note_col1.metric(
+        "Duplicate Rows",
+        f"{processing_summary['duplicate_rows']:,}",
+    )
+    note_col2.metric(
+        "Cancellation Rows",
+        f"{processing_summary['cancelled_rows']:,}",
+    )
+    note_col3.metric(
+        "Sales Date Range",
+        processing_summary["date_range"],
+    )
+
+    st.caption(
+        "Cleaning removes duplicate records, excludes non-positive prices, "
+        "filters invalid quantities, keeps completed sales for the main "
+        "dashboard, and preserves cancellation records for the optional "
+        "cancellation analysis."
+    )
+
 
 # ============================================================
 # 7. KPI DASHBOARD
@@ -447,7 +574,7 @@ render_kpi_cards(
         {
             "label": "Total Revenue",
             "value": (
-                f"£{kpis['total_revenue']:,.2f}"
+                f"GBP {kpis['total_revenue']:,.2f}"
             ),
             "icon": "💷",
             "accent": "#6366f1",
@@ -480,7 +607,7 @@ render_kpi_cards(
         {
             "label": "Average Order Value",
             "value": (
-                f"£{kpis['average_order_value']:,.2f}"
+                f"GBP {kpis['average_order_value']:,.2f}"
             ),
             "icon": "💳",
             "accent": "#ec4899",
@@ -503,10 +630,18 @@ render_charts(df_sales)
 # 9. CANCELLATION ANALYTICS
 # ============================================================
 
-if not df_cancel_source.empty:
-    render_cancelled_dashboard(df_cancel_source)
-else:
-    st.info("No cancellation data matches the selected filters.")
+show_cancellation_analytics = st.sidebar.checkbox(
+    "Show cancellation analytics",
+    value=False,
+)
+
+if show_cancellation_analytics:
+    if not df_cancel_source.empty:
+        render_cancelled_dashboard(df_cancel_source)
+    else:
+        st.info(
+            "No cancellation data matches the selected filters."
+        )
 
 
 # ============================================================
