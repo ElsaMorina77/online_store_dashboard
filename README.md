@@ -2,7 +2,6 @@
 
 An interactive Streamlit dashboard for analyzing online retail performance from a manager and executive perspective. The app loads transaction data from a CSV, Excel file, or direct file URL, cleans and prepares the dataset, and then presents KPI cards, sales analytics, customer insights, product performance, and cancellation analysis.
 
-Link: https://online-store-dashboard.streamlit.app/
 
 ## Project Goal
 
