@@ -12,7 +12,7 @@ NON_PRODUCT_STOCK_CODES = [
 ]
 
 
-@st.cache_data
+@st.cache_data(max_entries=4)
 def clean_data(df):
     """
     Clean completed sales transactions for the main dashboard.

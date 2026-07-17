@@ -39,7 +39,10 @@ st.caption(
 # CACHED DATA FUNCTIONS
 # ============================================================
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(
+    show_spinner=False,
+    max_entries=4,
+)
 def load_uploaded_file(
     file_bytes: bytes,
     file_name: str,
@@ -60,7 +63,10 @@ def load_uploaded_file(
     return load_data(file_object)
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(
+    show_spinner=False,
+    max_entries=4,
+)
 def load_url_data(url: str) -> pd.DataFrame:
     """
     Load data from a URL and cache the result.
@@ -69,7 +75,10 @@ def load_url_data(url: str) -> pd.DataFrame:
     return load_data(url)
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(
+    show_spinner=False,
+    max_entries=4,
+)
 def prepare_dashboard_data(
     raw_df: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -98,7 +107,6 @@ def prepare_dashboard_data(
     return df_sales, df_cancel_source
 
 
-@st.cache_data(show_spinner=False)
 def filter_by_countries(
     df: pd.DataFrame,
     selected_countries: tuple,
@@ -108,14 +116,13 @@ def filter_by_countries(
     """
 
     if not selected_countries:
-        return df.iloc[0:0]
+        return df.iloc[0:0].copy()
 
     return df[
         df["Country"].isin(selected_countries)
-    ]
+    ].copy()
 
 
-@st.cache_data(show_spinner=False)
 def filter_by_months(
     df: pd.DataFrame,
     selected_months: tuple,
@@ -125,14 +132,13 @@ def filter_by_months(
     """
 
     if not selected_months:
-        return df.iloc[0:0]
+        return df.iloc[0:0].copy()
 
     return df[
         df["InvoiceMonth"].isin(selected_months)
-    ]
+    ].copy()
 
 
-@st.cache_data(show_spinner=False)
 def filter_by_products(
     df: pd.DataFrame,
     selected_products: tuple,
@@ -142,16 +148,19 @@ def filter_by_products(
     """
 
     if not selected_products:
-        return df
+        return df.copy()
 
     return df[
         df["Description"].isin(
             selected_products
         )
-    ]
+    ].copy()
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(
+    show_spinner=False,
+    max_entries=8,
+)
 def create_csv_download(
     df: pd.DataFrame,
 ) -> bytes:
@@ -164,7 +173,10 @@ def create_csv_download(
     ).encode("utf-8")
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(
+    show_spinner=False,
+    max_entries=8,
+)
 def build_processing_summary(
     raw_df: pd.DataFrame,
     df_sales: pd.DataFrame,

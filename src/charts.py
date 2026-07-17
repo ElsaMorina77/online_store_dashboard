@@ -8,7 +8,10 @@ from plotly.subplots import make_subplots
 CURRENCY_SYMBOL = "GBP"
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(
+    show_spinner=False,
+    max_entries=8,
+)
 def _monthly_summary(df: pd.DataFrame) -> pd.DataFrame:
     """
     Build monthly commercial performance metrics once.
@@ -54,7 +57,10 @@ def _monthly_summary(df: pd.DataFrame) -> pd.DataFrame:
     return summary
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(
+    show_spinner=False,
+    max_entries=8,
+)
 def _product_summary(
     df: pd.DataFrame,
     top_n: int = 15,
@@ -100,7 +106,10 @@ def _product_summary(
     )
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(
+    show_spinner=False,
+    max_entries=8,
+)
 def _country_summary(
     df: pd.DataFrame,
     minimum_orders: int = 5,
@@ -159,7 +168,10 @@ def _country_summary(
     return summary.sort_values("Revenue", ascending=False)
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(
+    show_spinner=False,
+    max_entries=8,
+)
 def _customer_summary(
     df: pd.DataFrame,
     minimum_orders: int = 1,
@@ -213,7 +225,10 @@ def _customer_summary(
     return summary[summary["Orders"] >= minimum_orders].copy()
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(
+    show_spinner=False,
+    max_entries=8,
+)
 def _customer_segment_summary(
     df: pd.DataFrame,
 ) -> pd.DataFrame:
@@ -279,7 +294,10 @@ def _customer_segment_summary(
     return customers
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(
+    show_spinner=False,
+    max_entries=8,
+)
 def _segment_counts(df: pd.DataFrame) -> pd.DataFrame:
     """
     Count customers per segment and compute segment shares.
@@ -315,7 +333,10 @@ def _segment_counts(df: pd.DataFrame) -> pd.DataFrame:
     return counts
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(
+    show_spinner=False,
+    max_entries=8,
+)
 def _manager_health_metrics(df: pd.DataFrame) -> dict:
     """
     Calculate executive health metrics from cached summaries.

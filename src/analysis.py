@@ -6,7 +6,7 @@ import streamlit as st
 # DATA PREPARATION
 # ============================================================
 
-@st.cache_data
+@st.cache_data(max_entries=4)
 def prepare_data(df):
     """
     Add calculated fields required by the dashboard.
@@ -58,7 +58,7 @@ def prepare_data(df):
 # FILTER OPTIONS
 # ============================================================
 
-@st.cache_data
+@st.cache_data(max_entries=8)
 def get_unique_countries(df):
     return sorted(
         df["Country"]
@@ -67,7 +67,7 @@ def get_unique_countries(df):
     )
 
 
-@st.cache_data
+@st.cache_data(max_entries=8)
 def get_unique_months(df):
     return sorted(
         df["InvoiceMonth"]
@@ -76,7 +76,7 @@ def get_unique_months(df):
     )
 
 
-@st.cache_data
+@st.cache_data(max_entries=8)
 def get_top_products(df):
     """
     Return the top 50 products ranked by revenue.
@@ -97,7 +97,7 @@ def get_top_products(df):
 # KPI CALCULATIONS
 # ============================================================
 
-@st.cache_data
+@st.cache_data(max_entries=8)
 def calculate_kpis(df):
     """
     Calculate the main executive dashboard KPIs.
@@ -205,7 +205,7 @@ def get_previous_period_df(
 # KPI DELTAS
 # ============================================================
 
-@st.cache_data
+@st.cache_data(max_entries=8)
 def calculate_kpis_with_delta(
     current_df,
     previous_df,
