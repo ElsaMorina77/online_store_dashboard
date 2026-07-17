@@ -212,6 +212,3 @@ The design choices were made for clear reasons:
 - Plotly
 - OpenPyXL
 
-## Author Notes
-
-This project is a practical example of turning transactional retail data into an executive-friendly analytics tool. It emphasizes performance, business clarity, and modular dashboard design rather than only maximizing the number of charts.
