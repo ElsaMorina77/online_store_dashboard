@@ -385,6 +385,198 @@ def _manager_health_metrics(df: pd.DataFrame) -> dict:
     }
 
 
+@st.cache_data(
+    show_spinner=False,
+    max_entries=8,
+)
+def _order_value_by_country(
+    df: pd.DataFrame,
+    top_n: int = 10,
+) -> pd.DataFrame:
+    """
+    Build order-level values for the largest countries by revenue.
+    """
+
+    required_columns = [
+        "Country",
+        "Invoice",
+        "TotalPrice",
+    ]
+
+    if df.empty or any(
+        column not in df.columns
+        for column in required_columns
+    ):
+        return pd.DataFrame(
+            columns=[
+                "Country",
+                "Invoice",
+                "OrderValue",
+            ]
+        )
+
+    valid = df.dropna(
+        subset=["Country", "Invoice"]
+    ).copy()
+
+    if valid.empty:
+        return pd.DataFrame(
+            columns=[
+                "Country",
+                "Invoice",
+                "OrderValue",
+            ]
+        )
+
+    top_countries = (
+        valid.groupby(
+            "Country",
+            observed=True,
+        )["TotalPrice"]
+        .sum()
+        .nlargest(top_n)
+        .index
+    )
+
+    order_values = (
+        valid[valid["Country"].isin(top_countries)]
+        .groupby(
+            ["Country", "Invoice"],
+            observed=True,
+            as_index=False,
+        )
+        .agg(OrderValue=("TotalPrice", "sum"))
+    )
+
+    return order_values
+
+
+@st.cache_data(
+    show_spinner=False,
+    max_entries=8,
+)
+def _customer_recency_summary(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Build customer-level recency and monetary metrics.
+    """
+
+    if (
+        df.empty
+        or "Customer ID" not in df.columns
+        or "InvoiceDate" not in df.columns
+    ):
+        return pd.DataFrame(
+            columns=[
+                "Customer ID",
+                "Monetary",
+                "RecencyDays",
+                "Orders",
+            ]
+        )
+
+    valid = df.dropna(
+        subset=["Customer ID", "InvoiceDate"]
+    ).copy()
+
+    if valid.empty:
+        return pd.DataFrame(
+            columns=[
+                "Customer ID",
+                "Monetary",
+                "RecencyDays",
+                "Orders",
+            ]
+        )
+
+    reference_date = valid["InvoiceDate"].max()
+
+    summary = (
+        valid.groupby(
+            "Customer ID",
+            observed=True,
+            as_index=False,
+        )
+        .agg(
+            Monetary=("TotalPrice", "sum"),
+            LastPurchase=("InvoiceDate", "max"),
+            Orders=("Invoice", "nunique"),
+        )
+    )
+
+    summary["RecencyDays"] = (
+        reference_date - summary["LastPurchase"]
+    ).dt.days
+
+    return summary
+
+
+@st.cache_data(
+    show_spinner=False,
+    max_entries=8,
+)
+def _country_month_revenue(
+    df: pd.DataFrame,
+    top_n: int = 10,
+) -> pd.DataFrame:
+    """
+    Build a country-by-month revenue matrix for the largest markets.
+    """
+
+    required_columns = [
+        "Country",
+        "InvoiceMonth",
+        "TotalPrice",
+    ]
+
+    if df.empty or any(
+        column not in df.columns
+        for column in required_columns
+    ):
+        return pd.DataFrame(
+            columns=[
+                "Country",
+                "InvoiceMonth",
+                "Revenue",
+            ]
+        )
+
+    valid = df.dropna(
+        subset=["Country", "InvoiceMonth"]
+    ).copy()
+
+    if valid.empty:
+        return pd.DataFrame(
+            columns=[
+                "Country",
+                "InvoiceMonth",
+                "Revenue",
+            ]
+        )
+
+    top_countries = (
+        valid.groupby(
+            "Country",
+            observed=True,
+        )["TotalPrice"]
+        .sum()
+        .nlargest(top_n)
+        .index
+    )
+
+    return (
+        valid[valid["Country"].isin(top_countries)]
+        .groupby(
+            ["Country", "InvoiceMonth"],
+            observed=True,
+            as_index=False,
+        )
+        .agg(Revenue=("TotalPrice", "sum"))
+        .sort_values(["Country", "InvoiceMonth"])
+    )
+
+
 def _plot_chart(fig, chart_key: str):
     """
     Render a Plotly chart with consistent defaults.
@@ -811,24 +1003,300 @@ def _render_customer_value_map(df: pd.DataFrame):
     _plot_chart(fig, "customer_value_map")
 
 
+def _render_quantity_price_scatter(df: pd.DataFrame):
+    sample_size = 3000
+
+    _render_section_intro(
+        "Quantity vs Price Relationship",
+        "This numeric-vs-numeric view shows whether items tend to sell as "
+        "low-price bulk products or high-price low-volume products. Log scales "
+        "make the skewed retail data much easier to interpret."
+    )
+
+    required_columns = [
+        "Quantity",
+        "Price",
+        "Country",
+    ]
+
+    if any(
+        column not in df.columns
+        for column in required_columns
+    ):
+        st.info("The current dataset does not support this chart.")
+        return
+
+    chart_data = df.dropna(
+        subset=["Quantity", "Price", "Country"]
+    ).copy()
+
+    chart_data = chart_data[
+        (chart_data["Quantity"] > 0)
+        & (chart_data["Price"] > 0)
+    ]
+
+    if chart_data.empty:
+        st.info("No quantity-price data is available.")
+        return
+
+    if len(chart_data) > sample_size:
+        chart_data = chart_data.sample(
+            n=sample_size,
+            random_state=42,
+        )
+
+    fig = px.scatter(
+        chart_data,
+        x="Quantity",
+        y="Price",
+        color="Country",
+        hover_data=["Description"],
+        labels={
+            "Quantity": "Quantity",
+            "Price": f"Unit Price ({CURRENCY_SYMBOL})",
+        },
+    )
+    fig.update_xaxes(type="log")
+    fig.update_yaxes(type="log")
+    fig.update_layout(margin=dict(l=20, r=20, t=20, b=20))
+    fig.update_traces(
+        hovertemplate=(
+            "Quantity: %{x:,.0f}<br>"
+            f"Price: {CURRENCY_SYMBOL} %{{y:,.2f}}<br>"
+            "Country: %{marker.color}<extra></extra>"
+        )
+    )
+
+    _plot_chart(fig, "quantity_price_scatter")
+
+
+def _render_customer_orders_revenue(df: pd.DataFrame):
+    customers = _customer_segment_summary(df)
+
+    _render_section_intro(
+        "Orders vs Revenue per Customer",
+        "Each customer becomes one dot, making it easy to spot one-time buyers, "
+        "repeat mid-tier customers, and top-right VIP accounts."
+    )
+
+    if customers.empty:
+        st.info("No customer-level data is available.")
+        return
+
+    chart_data = customers.nlargest(250, "Revenue").copy()
+    chart_data["CustomerLabel"] = chart_data["Customer ID"].astype(str)
+
+    fig = px.scatter(
+        chart_data,
+        x="Orders",
+        y="Revenue",
+        size="UnitsSold",
+        color="Segment",
+        hover_name="CustomerLabel",
+        custom_data=["AverageOrderValue", "Segment"],
+        labels={
+            "Orders": "Number of Orders",
+            "Revenue": f"Total Revenue ({CURRENCY_SYMBOL})",
+            "UnitsSold": "Units Sold",
+            "Segment": "Customer Segment",
+        },
+    )
+    fig.update_traces(
+        hovertemplate=(
+            "<b>Customer %{hovertext}</b><br>"
+            "Orders: %{x:,.0f}<br>"
+            f"Revenue: {CURRENCY_SYMBOL} %{{y:,.2f}}<br>"
+            "Units sold: %{marker.size:,.0f}<br>"
+            f"AOV: {CURRENCY_SYMBOL} %{{customdata[0]:,.2f}}<br>"
+            "Segment: %{customdata[1]}<extra></extra>"
+        )
+    )
+    fig.update_layout(margin=dict(l=20, r=20, t=20, b=20))
+
+    _plot_chart(fig, "customer_orders_revenue_scatter")
+
+
+def _render_customer_aov_frequency(df: pd.DataFrame):
+    customers = _customer_segment_summary(df)
+
+    _render_section_intro(
+        "Average Order Value vs Order Frequency",
+        "This separates customers who buy often with small baskets from those "
+        "who buy rarely but spend a lot per order, which points to different "
+        "marketing and retention actions."
+    )
+
+    if customers.empty:
+        st.info("No customer AOV-frequency data is available.")
+        return
+
+    chart_data = customers.nlargest(250, "Revenue").copy()
+    chart_data["CustomerLabel"] = chart_data["Customer ID"].astype(str)
+
+    fig = px.scatter(
+        chart_data,
+        x="Orders",
+        y="AverageOrderValue",
+        size="Revenue",
+        color="Segment",
+        hover_name="CustomerLabel",
+        custom_data=["Revenue", "Segment"],
+        labels={
+            "Orders": "Order Frequency",
+            "AverageOrderValue": f"AOV ({CURRENCY_SYMBOL})",
+            "Revenue": f"Revenue ({CURRENCY_SYMBOL})",
+            "Segment": "Customer Segment",
+        },
+    )
+    fig.update_traces(
+        hovertemplate=(
+            "<b>Customer %{hovertext}</b><br>"
+            "Order frequency: %{x:,.0f}<br>"
+            f"AOV: {CURRENCY_SYMBOL} %{{y:,.2f}}<br>"
+            f"Revenue: {CURRENCY_SYMBOL} %{{customdata[0]:,.2f}}<br>"
+            "Segment: %{customdata[1]}<extra></extra>"
+        )
+    )
+    fig.update_layout(margin=dict(l=20, r=20, t=20, b=20))
+
+    _plot_chart(fig, "customer_aov_frequency_scatter")
+
+
+def _render_recency_monetary(df: pd.DataFrame):
+    customers = _customer_recency_summary(df)
+
+    _render_section_intro(
+        "Recency vs Monetary Value",
+        "This RFM-style plot highlights recently active valuable customers and "
+        "valuable customers who are slipping away and may need re-engagement."
+    )
+
+    if customers.empty:
+        st.info("No recency-monetary data is available.")
+        return
+
+    chart_data = customers.nlargest(250, "Monetary").copy()
+    chart_data["CustomerLabel"] = chart_data["Customer ID"].astype(str)
+
+    fig = px.scatter(
+        chart_data,
+        x="RecencyDays",
+        y="Monetary",
+        size="Orders",
+        color="Orders",
+        hover_name="CustomerLabel",
+        labels={
+            "RecencyDays": "Days Since Last Purchase",
+            "Monetary": f"Total Spend ({CURRENCY_SYMBOL})",
+            "Orders": "Number of Orders",
+        },
+    )
+    fig.update_traces(
+        hovertemplate=(
+            "<b>Customer %{hovertext}</b><br>"
+            "Days since last purchase: %{x:,.0f}<br>"
+            f"Total spend: {CURRENCY_SYMBOL} %{{y:,.2f}}<br>"
+            "Orders: %{marker.size:,.0f}<extra></extra>"
+        )
+    )
+    fig.update_layout(margin=dict(l=20, r=20, t=20, b=20))
+
+    _plot_chart(fig, "recency_monetary_scatter")
+
+
+def _render_country_month_heatmap(df: pd.DataFrame):
+    heatmap_data = _country_month_revenue(df)
+
+    _render_section_intro(
+        "Country by Month Revenue Heatmap",
+        "A dense market-performance view that shows which countries are gaining "
+        "or fading over time without needing several separate charts."
+    )
+
+    if heatmap_data.empty:
+        st.info("No country-month revenue data is available.")
+        return
+
+    pivot = heatmap_data.pivot(
+        index="Country",
+        columns="InvoiceMonth",
+        values="Revenue",
+    ).fillna(0)
+
+    fig = px.imshow(
+        pivot,
+        aspect="auto",
+        color_continuous_scale="Blues",
+        labels={
+            "x": "Month",
+            "y": "Country",
+            "color": f"Revenue ({CURRENCY_SYMBOL})",
+        },
+    )
+    fig.update_layout(margin=dict(l=20, r=20, t=20, b=20))
+
+    _plot_chart(fig, "country_month_revenue_heatmap")
+
+
+def _render_country_order_value_box(df: pd.DataFrame):
+    chart_data = _order_value_by_country(df)
+
+    _render_section_intro(
+        "Order Value Distribution by Country",
+        "This shows order-size distribution by market, helping reveal whether a "
+        "country is driven by many small baskets or fewer wholesale-sized orders."
+    )
+
+    if chart_data.empty:
+        st.info("No country order-value distribution data is available.")
+        return
+
+    fig = px.box(
+        chart_data,
+        x="Country",
+        y="OrderValue",
+        points="outliers",
+        labels={
+            "Country": "Country",
+            "OrderValue": f"Order Value ({CURRENCY_SYMBOL})",
+        },
+    )
+    fig.update_layout(margin=dict(l=20, r=20, t=20, b=20))
+    fig.update_traces(
+        hovertemplate=(
+            "<b>%{x}</b><br>"
+            f"Order value: {CURRENCY_SYMBOL} %{{y:,.2f}}<extra></extra>"
+        )
+    )
+
+    _plot_chart(fig, "country_order_value_box")
+
+
 PRESET_CONFIG = {
     "Executive Overview": [
         _render_manager_health_snapshot,
         _render_combined_commercial_trend,
         _render_top_products,
+        _render_customer_orders_revenue,
+        _render_country_month_heatmap,
         _render_country_performance,
     ],
     "Customer Intelligence": [
         _render_manager_health_snapshot,
         _render_customer_segments_count,
         _render_customer_segment_distribution,
-        _render_customer_value_map,
+        _render_customer_orders_revenue,
+        _render_customer_aov_frequency,
+        _render_recency_monetary,
         _render_average_order_value_trend,
     ],
     "Product And Market": [
         _render_combined_commercial_trend,
         _render_top_products,
         _render_product_portfolio,
+        _render_quantity_price_scatter,
+        _render_country_order_value_box,
+        _render_country_month_heatmap,
         _render_country_performance,
     ],
     "Full Suite": [
@@ -838,10 +1306,15 @@ PRESET_CONFIG = {
         _render_monthly_value_mix,
         _render_average_order_value_trend,
         _render_product_portfolio,
+        _render_quantity_price_scatter,
         _render_country_performance,
+        _render_country_order_value_box,
+        _render_country_month_heatmap,
         _render_customer_segments_count,
         _render_customer_segment_distribution,
-        _render_customer_value_map,
+        _render_customer_orders_revenue,
+        _render_customer_aov_frequency,
+        _render_recency_monetary,
     ],
 }
 
