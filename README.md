@@ -2,6 +2,8 @@
 
 An interactive Streamlit dashboard for analyzing online retail performance from a manager and executive perspective. The app loads transaction data from a CSV, Excel file, or direct file URL, cleans and prepares the dataset, and then presents KPI cards, sales analytics, customer insights, product performance, and cancellation analysis.
 
+Link: https://online-store-dashboard.streamlit.app/
+
 ## Project Goal
 
 The purpose of this project is to turn raw store transaction data into clear business insight. Instead of showing charts just for the sake of visualization, the dashboard is designed to answer practical management questions such as:
@@ -212,6 +214,3 @@ The design choices were made for clear reasons:
 - Plotly
 - OpenPyXL
 
-## Author Notes
-
-This project is a practical example of turning transactional retail data into an executive-friendly analytics tool. It emphasizes performance, business clarity, and modular dashboard design rather than only maximizing the number of charts.
